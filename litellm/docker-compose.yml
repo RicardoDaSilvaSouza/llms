@@ -1,0 +1,124 @@
+services:
+
+  # ─────────────────────────────────────────
+  # PostgreSQL + pgvector (shared by LiteLLM & local-memory-mcp)
+  # ─────────────────────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: litellm_db
+    restart: always
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: llmproxy
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - litellm_postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d litellm -U llmproxy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────────────────
+  # Ollama — serves bge-m3 (embeddings for memory)
+  # Main LLM is on the RTX 4080 rig — NOT here
+  # ─────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_FLASH_ATTENTION=1
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  # Pull bge-m3 on first boot, then exit
+#  ollama-init:
+#    image: ollama/ollama:latest
+#    container_name: ai_ollama_init
+#    depends_on:
+#      ollama:
+#        condition: service_healthy
+#    volumes:
+#      - ollama_data:/root/.ollama
+#    entrypoint: ["/bin/sh", "-c"]
+#    command: >
+#      "OLLAMA_HOST=http://ollama:11434 ollama pull nomic-embed-text &&
+#       echo 'Model pulled successfully'"
+#    restart: "no"
+
+  # ─────────────────────────────────────────
+  # LiteLLM Proxy — routes Claude Code to RTX 4080 rig
+  # ─────────────────────────────────────────
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+    environment:
+      - LITELLM_LOG=INFO
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - DATABASE_URL=postgresql://llmproxy:${DB_PASSWORD}@db:5432/litellm
+      - STORE_MODEL_IN_DB=True
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+      - UI_USERNAME=${UI_USERNAME}
+      - UI_PASSWORD=${UI_PASSWORD}
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ─────────────────────────────────────────
+  # local-memory-mcp (cunicopia/local-memory-mcp)
+  # PostgreSQL + pgvector + Ollama embeddings
+  # Uses stdio transport — Claude Code runs it directly via docker exec
+  # NOT exposed as a long-running SSE server
+  # ─────────────────────────────────────────
+  local-memory-mcp:
+    build:
+      context: ./local-memory-mcp
+    image: mcp/local-memory
+    container_name: ai_memory_mcp
+    profiles:
+      - tools
+    restart: "no"
+    stdin_open: true
+    tty: false
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: litellm
+      POSTGRES_USER: llmproxy
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      OLLAMA_API_URL: http://ollama:11434
+      OLLAMA_EMBEDDING_MODEL: nomic-embed-text:latest
+      DEFAULT_MEMORY_DOMAIN: default
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+volumes:
+  litellm_postgres_data:
+  ollama_data:
+    name: ai_ollama_data
