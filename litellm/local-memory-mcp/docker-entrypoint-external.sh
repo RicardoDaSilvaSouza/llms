@@ -5,6 +5,8 @@ set -e
 exec 3>&1
 exec 1>&2
 
+POSTGRES_SCHEMA="${POSTGRES_SCHEMA:-public}"
+
 # If POSTGRES_HOST is external (not localhost), skip internal postgres entirely
 if [ "${POSTGRES_HOST}" != "localhost" ] && [ "${POSTGRES_HOST}" != "127.0.0.1" ]; then
     echo "External PostgreSQL detected at ${POSTGRES_HOST}:${POSTGRES_PORT:-5432}, skipping internal DB init..."
@@ -15,15 +17,28 @@ if [ "${POSTGRES_HOST}" != "localhost" ] && [ "${POSTGRES_HOST}" != "127.0.0.1" 
         sleep 2
     done
 
-    # Run setup SQL against the external DB (creates functions + extensions)
-    if [ -f sql/setup_database.sql ]; then
-        echo "Running setup SQL on external database..."
+    # Create schema if not public
+    if [ "${POSTGRES_SCHEMA}" != "public" ]; then
+        echo "Creating schema '${POSTGRES_SCHEMA}' if not exists..."
         PGPASSWORD="${POSTGRES_PASSWORD}" psql \
             -h "${POSTGRES_HOST}" \
             -p "${POSTGRES_PORT:-5432}" \
             -U "${POSTGRES_USER:-postgres}" \
             -d "${POSTGRES_DB:-postgres}" \
-            -f sql/setup_database.sql || true  # idempotent, ok if already exists
+            -c "CREATE SCHEMA IF NOT EXISTS ${POSTGRES_SCHEMA}; GRANT ALL ON SCHEMA ${POSTGRES_SCHEMA} TO ${POSTGRES_USER:-postgres};"
+    fi
+
+    # Run setup SQL against the external DB (creates functions + extensions)
+    if [ -f sql/setup_database.sql ]; then
+        echo "Running setup SQL on external database (schema: ${POSTGRES_SCHEMA})..."
+        PGPASSWORD="${POSTGRES_PASSWORD}" psql \
+            -h "${POSTGRES_HOST}" \
+            -p "${POSTGRES_PORT:-5432}" \
+            -U "${POSTGRES_USER:-postgres}" \
+            -d "${POSTGRES_DB:-postgres}" \
+            -v schema="${POSTGRES_SCHEMA}" \
+            -c "SET search_path TO ${POSTGRES_SCHEMA}, public;" \
+            -f sql/setup_database.sql || true
     fi
 
 else
@@ -47,7 +62,7 @@ else
     done
 fi
 
-echo "PostgreSQL is ready. Starting MCP server..."
+echo "PostgreSQL is ready (schema: ${POSTGRES_SCHEMA}). Starting MCP server..."
 
 # Restore stdout for MCP stdio protocol
 exec 1>&3
