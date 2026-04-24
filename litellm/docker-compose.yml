@@ -64,7 +64,9 @@ services:
   # LiteLLM Proxy — routes Claude Code to RTX 4080 rig
   # ─────────────────────────────────────────
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    build:
+      context: .
+      dockerfile: Dockerfile.litellm
     container_name: litellm
     ports:
       - "4000:4000"
@@ -84,6 +86,7 @@ services:
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
       - UI_USERNAME=${UI_USERNAME}
       - UI_PASSWORD=${UI_PASSWORD}
+      - DISABLE_SCHEMA_UPDATE=true
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
