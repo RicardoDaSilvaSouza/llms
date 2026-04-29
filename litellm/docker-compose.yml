@@ -93,6 +93,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
+      jcodemunch:
+        condition: service_healthy   # ← wait for jcodemunch SSE to be ready
 
   # ─────────────────────────────────────────
   # local-memory-mcp (cunicopia/local-memory-mcp)
@@ -123,7 +127,43 @@ services:
       ollama:
         condition: service_healthy
 
+  # ─────────────────────────────────────────
+  # jCodeMunch MCP — structured code retrieval via tree-sitter
+  # Runs as SSE server so LiteLLM can register it by URL
+  # Uses Ollama (OpenAI-compatible) for AI symbol summaries
+  # ─────────────────────────────────────────
+  jcodemunch:
+    image: python:3.12-slim
+    container_name: ai_jcodemunch
+    restart: unless-stopped
+    command: >
+      sh -c "pip install jcodemunch-mcp -q &&
+             jcodemunch-mcp serve --transport sse --host 0.0.0.0 --port 8901"
+    ports:
+      - "8901:8901"
+    volumes:
+      - ~/.code-index:/root/.code-index   # persist the code index
+      - ${WORKSPACE_PATH:-~/workspace/}:/workspace:ro  # mount codebase to index (read-only)
+    #environment:
+      # Use Ollama as AI summarizer (OpenAI-compatible endpoint)
+      #- OPENAI_API_BASE=http://ollama:11434/v1
+      #- OPENAI_API_KEY=ollama              # Ollama ignores this value
+      #- OPENAI_MODEL=${JCODEMUNCH_MODEL:-llama3.2}
+      # Only allow localhost/internal summarizer endpoints (security default)
+      #- JCODEMUNCH_ALLOW_REMOTE_SUMMARIZER=false
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8901/health || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s  # pip install needs time on first boot
+
 volumes:
   litellm_postgres_data:
   ollama_data:
     name: ai_ollama_data
+  jcodemunch_index:
+    name: ai_jcodemunch_index   # persists the code index across restarts
