@@ -88,8 +88,6 @@ services:
       - UI_PASSWORD=${UI_PASSWORD}
       - DISABLE_SCHEMA_UPDATE=true
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
