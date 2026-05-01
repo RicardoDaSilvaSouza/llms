@@ -166,5 +166,3 @@ volumes:
   litellm_postgres_data:
   ollama_data:
     name: ai_ollama_data
-  jcodemunch_index:
-    name: ai_jcodemunch_index   # persists the code index across restarts
