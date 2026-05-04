@@ -1,0 +1,9 @@
+FROM python:3.12-slim
+
+# Keep pip up to date and install jcodemunch-mcp in one layer
+RUN pip install --upgrade pip && \
+    pip install jcodemunch-mcp
+
+EXPOSE 8901
+
+CMD ["jcodemunch-mcp", "serve", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8901"]

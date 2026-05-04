@@ -94,7 +94,7 @@ services:
       ollama:
         condition: service_healthy
       jcodemunch:
-        condition: service_healthy   # ← wait for jcodemunch SSE to be ready
+        condition: service_started   # ← wait for jcodemunch SSE to be ready
 
   # ─────────────────────────────────────────
   # local-memory-mcp (cunicopia/local-memory-mcp)
@@ -131,7 +131,9 @@ services:
   # Uses Ollama (OpenAI-compatible) for AI symbol summaries
   # ─────────────────────────────────────────
   jcodemunch:
-    image: python:3.12-slim
+    build:
+      context: .
+      dockerfile: Dockerfile.jcodemunch
     container_name: ai_jcodemunch
     restart: unless-stopped
     command: >
@@ -154,7 +156,7 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:8901/health || exit 1" ]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8901/mcp')\" 2>&1 | grep -qv 'Connection refused' && exit 0 || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 5
