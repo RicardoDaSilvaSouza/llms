@@ -86,7 +86,7 @@ services:
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
       - UI_USERNAME=${UI_USERNAME}
       - UI_PASSWORD=${UI_PASSWORD}
-      - DISABLE_SCHEMA_UPDATE=true
+      - DISABLE_SCHEMA_UPDATE=false
     restart: unless-stopped
     depends_on:
       db:
@@ -113,7 +113,7 @@ services:
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: litellm
+      POSTGRES_DB: memory_mcp
       POSTGRES_USER: llmproxy
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       OLLAMA_API_URL: http://ollama:11434
