@@ -162,7 +162,59 @@ services:
       retries: 5
       start_period: 30s  # pip install needs time on first boot
 
+  # ─────────────────────────────────────────
+  # 9Router — AI coding router / OpenAI-compatible proxy
+  # Dashboard: http://localhost:20128/dashboard
+  # API:       http://localhost:20128/v1
+  # ─────────────────────────────────────────
+  9router:
+    image: decolua/9router:latest
+    container_name: 9router
+    restart: unless-stopped
+
+    # Bind to localhost only.
+    # Other Compose services can still use http://9router:20128.
+    ports:
+      - "127.0.0.1:20128:20128"
+
+    environment:
+      DATA_DIR: /app/data
+      PORT: "20128"
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: production
+
+      # Change these values in .env.
+      INITIAL_PASSWORD: ${NINE_ROUTER_INITIAL_PASSWORD}
+      JWT_SECRET: ${NINE_ROUTER_JWT_SECRET}
+      API_KEY_SECRET: ${NINE_ROUTER_API_KEY_SECRET}
+      MACHINE_ID_SALT: ${NINE_ROUTER_MACHINE_ID_SALT}
+
+      # Public URL used by the browser/OAuth flows.
+      NEXT_PUBLIC_BASE_URL: http://localhost:20128
+
+      # Recommended if you expose the API outside localhost.
+      REQUIRE_API_KEY: "true"
+
+      # Keep disabled unless you need request/response logging.
+      ENABLE_REQUEST_LOGS: "false"
+
+    volumes:
+      - 9router_data:/app/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://127.0.0.1:20128/api/health || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
 volumes:
   litellm_postgres_data:
   ollama_data:
     name: ai_ollama_data
+  9router_data:
+    name: ai_9router_data
