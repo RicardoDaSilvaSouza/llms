@@ -80,6 +80,7 @@ services:
     environment:
       - LITELLM_LOG=INFO
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - NINE_ROUTER_API_KEY=${NINE_ROUTER_API_KEY}
       - DATABASE_URL=postgresql://llmproxy:${DB_PASSWORD}@db:5432/litellm
       - STORE_MODEL_IN_DB=True
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
